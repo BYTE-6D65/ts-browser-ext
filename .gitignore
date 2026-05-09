@@ -1,0 +1,16 @@
+# binary
+ts-browser-ext
+*.bin
+
+# local state
+tailscale-browser-ext/
+*.state
+*.log
+
+# wrapper scripts (contain local IPs)
+# use deploy/ts-browser-ext.wrapper.template instead
+ts-browser-ext.wrapper
+
+# editor
+*.swp
+*~

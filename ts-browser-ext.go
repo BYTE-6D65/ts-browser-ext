@@ -33,11 +33,14 @@ import (
 	"tailscale.com/tsnet"
 	"tailscale.com/types/logger"
 	"tailscale.com/types/netmap"
+
+	"net/netip"
 )
 
 var (
 	installFlag   = flag.String("install", "", "register the browser extension; string is 'C' (Chrome) or 'F' (Firefox) followed by extension ID")
 	uninstallFlag = flag.Bool("uninstall", false, "unregister the browser extension")
+	exitNodeFlag  = flag.String("exit-node", os.Getenv("TS_EXIT_NODE"), "Tailscale IP of exit node to route all traffic through (env: TS_EXIT_NODE)")
 )
 
 func main() {
@@ -312,6 +315,32 @@ func (h *host) setWantRunning(want bool) error {
 	}); err != nil {
 		return fmt.Errorf("EditPrefs to wantRunning=%v: %w", want, err)
 	}
+
+	// Set exit node if configured
+	if want && *exitNodeFlag != "" {
+		fmt.Fprintf(os.Stderr, "[ts-browser-ext] setting exit node to %s\n", *exitNodeFlag)
+		exitCtx, exitCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer exitCancel()
+		exitNode, err := netip.ParseAddr(*exitNodeFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ts-browser-ext] invalid exit-node IP: %v\n", err)
+			return fmt.Errorf("invalid exit-node IP %q: %w", *exitNodeFlag, err)
+		}
+		if _, err := lc.EditPrefs(exitCtx, &ipn.MaskedPrefs{
+			ExitNodeIPSet:             true,
+			ExitNodeAllowLANAccessSet: true,
+			Prefs: ipn.Prefs{
+				ExitNodeIP:             exitNode,
+				ExitNodeAllowLANAccess: true,
+			},
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "[ts-browser-ext] EditPrefs exit node failed: %v\n", err)
+			return fmt.Errorf("EditPrefs to set exit node %s: %w", exitNode, err)
+		}
+		fmt.Fprintf(os.Stderr, "[ts-browser-ext] exit node set to %s\n", exitNode)
+		h.logf("exit node set to %s", exitNode)
+	}
+
 	return nil
 }
 
@@ -374,6 +403,30 @@ func (h *host) handleInit(msg *request) (ret error) {
 		return fmt.Errorf("getting local client: %w", err)
 	}
 
+	// Apply exit node from TS_EXIT_NODE env var if set
+	if *exitNodeFlag != "" {
+		exitNode, err := netip.ParseAddr(*exitNodeFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ts-browser-ext] invalid exit-node IP: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "[ts-browser-ext] applying exit node %s\n", exitNode)
+			exitCtx, exitCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if _, err := lc.EditPrefs(exitCtx, &ipn.MaskedPrefs{
+				ExitNodeIPSet:             true,
+				ExitNodeAllowLANAccessSet: true,
+				Prefs: ipn.Prefs{
+					ExitNodeIP:             exitNode,
+					ExitNodeAllowLANAccess: true,
+				},
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "[ts-browser-ext] EditPrefs exit node failed: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "[ts-browser-ext] exit node set to %s\n", exitNode)
+			}
+			exitCancel()
+		}
+	}
+
 	wc, err := lc.WatchIPNBus(h.ctx, ipn.NotifyInitialState|ipn.NotifyRateLimit)
 	if err != nil {
 		return fmt.Errorf("watching IPN bus: %w", err)
@@ -381,7 +434,7 @@ func (h *host) handleInit(msg *request) (ret error) {
 	go h.watchIPNBus(wc)
 
 	h.ws, err = web.NewServer(web.ServerOpts{
-		Mode:        web.LoginServerMode, // TODO: manage?
+		Mode:        web.LoginServerMode,
 		LocalClient: lc,
 	})
 	if err != nil {

@@ -1,0 +1,11 @@
+#!/bin/bash
+# Template wrapper for ts-browser-ext native messaging host.
+# Copy to your NativeMessagingHosts dir and set TS_EXIT_NODE.
+#
+# Install:
+#   cp ts-browser-ext.wrapper.template ~/.config/chromium/NativeMessagingHosts/ts-browser-ext
+#   chmod +x ~/.config/chromium/NativeMessagingHosts/ts-browser-ext
+#   cp ts-browser-ext-binary ~/.config/chromium/NativeMessagingHosts/ts-browser-ext.bin
+
+export TS_EXIT_NODE="<YOUR_EXIT_NODE_TAILSCALE_IP>"
+exec "$(dirname "$0")/ts-browser-ext.bin" "$@" 2>>/tmp/ts-browser-ext.log
