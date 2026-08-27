@@ -74,20 +74,17 @@ browser.runtime.onConnect.addListener((port) => {
   sendPopupStatus();
 });
 
-// browserByte returns either "F" for Firefox or "C" for chrome.
-// Other browsers return "?".
+// browserByte returns "F" for Firefox.
+// The Chrome copy of this file returns "C".
 function browserByte() {
-  if (typeof browser !== "undefined") {
-    return "F";
-  }
-  return "?";
+  return "F";
 }
 
 function sendPopupStatus() {
   // firefox requires that extensions settings proxies have private browsing access
   browser.extension.isAllowedIncognitoAccess().then(isAllowed => {
     if (!isAllowed) {
-          sendToPopup({
+      sendToPopup({
         needsIncognitoPermission: true
       });
     }

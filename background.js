@@ -79,16 +79,10 @@ chrome.runtime.onConnect.addListener((port) => {
   sendPopupStatus();
 });
 
-// browserByte returns either "F" for Firefox or "C" for chrome.
-// Other browsers return "?".
+// browserByte returns "C" for Chrome.
+// The Firefox copy of this file returns "F".
 function browserByte() {
-  if (typeof chrome !== "undefined") {
-    if (typeof browser !== "undefined") {
-      return "F"; // Firefox supports both `chrome` and `browser`
-    }
-    return "C";
-  }
-  return "?";
+  return "C";
 }
 
 function sendPopupStatus() {
