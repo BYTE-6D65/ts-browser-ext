@@ -8,4 +8,13 @@
 #   cp ts-browser-ext-binary ~/.config/chromium/NativeMessagingHosts/ts-browser-ext.bin
 
 export TS_EXIT_NODE="<YOUR_EXIT_NODE_TAILSCALE_IP>"
+
+# Respawn-proof node registration: tsnet consumes TS_AUTHKEY whenever its
+# state is unauthenticated, so the backend registers itself on every launch
+# instead of waiting on rotating interactive login URLs.
+# Use a REUSABLE, NON-ephemeral key (ephemeral nodes get reaped when the
+# browser closes). Leave empty once registered (empty == unset for tsnet).
+TS_AUTHKEY=""
+export TS_AUTHKEY
+
 exec "$(dirname "$0")/ts-browser-ext.bin" "$@" 2>>/tmp/ts-browser-ext.log
