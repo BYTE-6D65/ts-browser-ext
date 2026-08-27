@@ -148,7 +148,14 @@ function connectToNativeHost() {
     }
     if (message.procRunning) {
       if (message.procRunning.port) {
-        setProxy(message.procRunning.port);
+        // A (new) backend process is up. Remember its proxy port, but do NOT
+        // enable the browser proxy yet: tsnet only starts after we send
+        // "init", and routing traffic before then causes 500s (no tsnet) and
+        // a nil-pointer panic on 100.100.100.100 (the web UI is only created
+        // inside handleInit). The proxy is gated on status.running below.
+        backendProxyPort = message.procRunning.port;
+        didInit = false; // new backend: ensure we (re)send init
+        maybeSendInit();
       } else if (message.procRunning.errror) {
         console.log(
           "procRunning error from backend: " + message.procRunning.err
@@ -162,13 +169,19 @@ function connectToNativeHost() {
     }
     if (message.status) {
       lastStatus = message.status;
+      // Only route traffic once tsnet is actually up.
+      if (message.status.running) {
+        setProxy(backendProxyPort);
+      } else if (proxyEnabled) {
+        setProxy(0);
+      }
     }
-    maybeSendInit();
     sendPopupStatus();
   });
 }
 
 var lastProxyPort = 0;
+var backendProxyPort = 0; // port reported by the backend; proxy enables only once tsnet is running
 var lastStatus = {}; // last Go status
 
 function setProxy(proxyPort) {
