@@ -114,6 +114,41 @@ let portError = null;
 
 connectToNativeHost();
 
+// MV3 service workers are killed after ~30s idle and are NOT restarted on
+// browser launch on their own (top-level code only runs when the worker is
+// woken by an event). Without this, the native host backend never launches
+// after a browser restart and the tailnet proxy silently stays dead until
+// the popup is opened manually. Wake ourselves on browser startup, and use
+// a periodic alarm to (a) keep the worker alive via port activity and
+// (b) re-establish the native messaging port if it died.
+chrome.runtime.onStartup.addListener(() => {
+  console.log("browser startup: ensuring native host connection");
+  connectToNativeHost();
+});
+
+chrome.alarms.create("keepalive", { periodInMinutes: 0.5 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== "keepalive") {
+    return;
+  }
+  if (deadPort || !nmPort) {
+    console.log("keepalive: native port dead, reconnecting");
+    connectToNativeHost();
+    return;
+  }
+  // get-status both resets the service worker idle timer (port activity)
+  // and refreshes lastStatus; the reply is handled by the onMessage
+  // listener above.
+  try {
+    nmPort.postMessage({ cmd: "get-status" });
+  } catch (e) {
+    console.log("keepalive: post failed (" + e + "), reconnecting");
+    deadPort = true;
+    connectToNativeHost();
+  }
+});
+
 function connectToNativeHost() {
   if (nmPort && !deadPort) {
     return;
